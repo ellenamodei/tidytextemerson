@@ -1,0 +1,127 @@
+---
+title: "Quiz 2- Part 2"
+author: "Ellen Amodei"
+date: '2018-01-30'
+output:
+  html_notebook:
+    df_print: paged
+  html_document:
+    df_print: paged
+subtitle: Unstructured Text Data
+---
+```{r}
+rm(list=ls())
+
+```
+American history and much of our world history is often viewed through the lense of the prevailing class of the period. The great literary works of 19th and 20th century America demonstrate glimpses of the differing livelihoods and distinct sentiment of the time. In the below analysis, Ralph Waldo Emerson, whose philosophical work established himself as both a leading transcendentalist and naturalist, laid the foundation of what many consider to be standard American ethics and ideals. In using Emerson as a base of comparison, the two other authors selected in the below text analysis represent differing pictures of the same “American Ideal”. 
+
+When placed alongside famed abolitionist Frederick Douglass,  F. Scott Fitzgerald whose work embodies the Conspicuous Consumption of the Roaring 20’s seems unsurprisingly more blithe in nature. The prevailing tone of Douglass and his usage of words such as slavery, master, and free, convey a darker sentiment of the struggles of minority Americans during the late 19th century. While F. Scott’s works are fictional, they characterize the worries of upper-class white america which is centered around love, people, girl(s), and a general sense of lightness. 
+
+In the later part of the analysis, we map the similarities both authors have to Emerson and from the below correlation matrix. The struggles of Frederick Douglass according to the text research, seem to have more in common with Emerson’s idea of American values than that of Scott’s.
+
+
+
+```{r}
+library(dplyr)
+library(scales)
+library(sentimentr)
+library(tidytext)
+library(gutenbergr)
+library(ggrepel)
+
+```
+
+####Download works of Emerson, Fitzgerald, and Douglass from Gutenberg
+```{r}
+emerson_books <- gutenberg_works(author == "Emerson, Ralph Waldo") %>%
+  gutenberg_download(meta_fields = "title")
+```
+
+```{r}
+fscott_books <- gutenberg_works(author ==  "Fitzgerald, F. Scott (Francis Scott)") %>%
+  gutenberg_download(meta_fields = "title")
+```
+
+```{r}
+douglass_books <- gutenberg_works(author == "Douglass, Frederick") %>%
+  gutenberg_download(meta_fields = "title")
+```
+
+####Tidy the text into new columns- words
+```{r}
+tidy_emerson<- emerson_books %>% unnest_tokens(word,text) %>% anti_join(stop_words)
+
+tidy_emerson %>% count(word, sort=TRUE) %>% ungroup()
+```
+
+
+```{r}
+tidy_fscott<- fscott_books %>% unnest_tokens(word,text) %>% anti_join(stop_words)
+tidy_fscott %>% count(word, sort=TRUE) %>% ungroup()
+
+```
+
+```{r}
+tidy_douglass<- douglass_books %>% unnest_tokens(word,text) %>% anti_join(stop_words)
+tidy_douglass %>% count(word, sort=TRUE) %>% ungroup()
+```
+
+```{r}
+
+library(stringr)
+library(tidyr)
+```
+
+####Assign Frequency
+```{r}
+frequency <- bind_rows(mutate(tidy_fscott, author = "fscott"), mutate(tidy_douglass, author = "fdouglass"),mutate(tidy_emerson, author = "remerson")) %>% mutate(word = str_extract(word, "[a-z]+")) %>% count(author, word) %>% group_by(author) %>% mutate(proportion = n / sum(n)) %>% select(-n) %>% spread(author,proportion) %>% gather(author, proportion, 'fscott' :'fdouglass')
+```
+
+```{r}
+class(frequency$proportion)
+class(frequency$author)
+```
+
+####Plot Frequency
+```{r}
+ggplot(frequency, aes(x = proportion, y = remerson, color = abs(remerson - proportion))) + geom_abline(color = "gray40", lty = 2) + geom_jitter(alpha = 0.1, size = 3.5, width = 0.5, height = 0.5) + geom_text(aes(label = word), check_overlap = TRUE, vjust = 1.5) + scale_x_log10(labels = percent_format()) + scale_y_log10(labels = percent_format()) + scale_color_gradient(limits = c(0, 0.001), low = "darkslategray4", high = "gray75") + facet_wrap(~author, ncol = 2) + theme(legend.position = "none") + labs(y = "remerson", x = NULL)
+
+
+
+
+```
+####Look at token coorelation
+```{r}
+cor.test(data=frequency[frequency$author=="fscott",],~proportion + `remerson`)
+```
+
+```{r}
+cor.test(data=frequency[frequency$author=="fdouglass",],~proportion + `remerson`)
+
+```
+####Plot TF-IDF
+```{r}
+tf_idf_df <- tidy_fscott %>% 
+        count(title, word, sort = TRUE) %>%
+        bind_tf_idf(word, title, n)
+
+tf_idf_df %>% mutate(word = reorder(word, n)) %>% top_n(10) %>% ggplot(aes(x=word, y=tf_idf, fill = title)) + geom_col() + coord_flip()
+```
+
+```{r}
+tf_idf_df <- tidy_emerson %>% 
+        count(title, word, sort = TRUE) %>%
+        bind_tf_idf(word, title, n)
+
+tf_idf_df %>% mutate(word = reorder(word, n)) %>% top_n(10) %>% ggplot(aes(x=word, y=tf_idf, fill = title)) + geom_col() + coord_flip()
+```
+```{r}
+tf_idf_df <- tidy_douglass %>% 
+        count(title, word, sort = TRUE) %>%
+        bind_tf_idf(word, title, n)
+
+tf_idf_df %>% mutate(word = reorder(word, n)) %>% top_n(10) %>% ggplot(aes(x=word, y=tf_idf, fill = title)) + geom_col() + coord_flip()
+```
+
+
+
